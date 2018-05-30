@@ -1,125 +1,51 @@
-// XXX could use some tests
+Session = new ReactiveDict('session');
 
-Session = _.extend({}, {
-  keys: {},
-  key_deps: {}, // key -> context id -> context
-  key_value_deps: {}, // key -> value -> context id -> context
+// Documentation here is really awkward because the methods are defined
+// elsewhere
 
-  // XXX remove debugging method (or improve it, but anyway, don't
-  // ship it in production)
-  dump_state: function () {
-    var self = this;
-    console.log("=== Session state ===");
-    for (var key in self.key_deps) {
-      var ids = _.keys(self.key_deps[key]);
-      if (!ids.length)
-        continue;
-      console.log(key + ": " + _.reject(ids, function (x) {return x === "_once"}).join(' '));
-    }
+/**
+ * @memberOf Session
+ * @method set
+ * @summary Set a variable in the session. Notify any listeners that the value
+ * has changed (eg: redraw templates, and rerun any
+ * [`Tracker.autorun`](#tracker_autorun) computations, that called
+ * [`Session.get`](#session_get) on this `key`.)
+ * @locus Client
+ * @param {String} key The key to set, eg, `selectedItem`
+ * @param {EJSONable | undefined} value The new value for `key`
+ */
 
-    for (var key in self.key_value_deps) {
-      for (var value in self.key_value_deps[key]) {
-        var ids = _.keys(self.key_value_deps[key][value]);
-        if (!ids.length)
-          continue;
-        console.log(key + "(" + value + "): " + _.reject(ids, function (x) {return x === "_once";}).join(' '));
-      }
-    }
-  },
+/**
+ * @memberOf Session
+ * @method setDefault
+ * @summary Set a variable in the session if it hasn't been set before.
+ * Otherwise works exactly the same as [`Session.set`](#session_set).
+ * @locus Client
+ * @param {String} key The key to set, eg, `selectedItem`
+ * @param {EJSONable | undefined} value The new value for `key`
+ */
 
-  set: function (key, value) {
-    var self = this;
+/**
+ * @memberOf Session
+ * @method get
+ * @summary Get the value of a session variable. If inside a [reactive
+ * computation](#reactivity), invalidate the computation the next time the
+ * value of the variable is changed by [`Session.set`](#session_set). This
+ * returns a clone of the session value, so if it's an object or an array,
+ * mutating the returned value has no effect on the value stored in the
+ * session.
+ * @locus Client
+ * @param {String} key The name of the session variable to return
+ */
 
-    if (typeof value !== 'string' &&
-        typeof value !== 'number' &&
-        typeof value !== 'boolean' &&
-        value !== null && value !== undefined)
-      throw new Error("Session.set: value can't be an object");
-
-    var old_value = self.keys[key];
-    if (value === old_value)
-      return;
-    self.keys[key] = value;
-
-    var invalidate = function (map) {
-      if (map)
-        for (var id in map)
-          map[id].invalidate();
-    };
-
-    self._ensureKey(key);
-    invalidate(self.key_deps[key]);
-    invalidate(self.key_value_deps[key][old_value]);
-    invalidate(self.key_value_deps[key][value]);
-  },
-
-  get: function (key) {
-    var self = this;
-    var context = Meteor.deps.Context.current;
-    self._ensureKey(key);
-
-    if (context && !(context.id in self.key_deps[key])) {
-      self.key_deps[key][context.id] = context;
-      context.onInvalidate(function () {
-        delete self.key_deps[key][context.id];
-      });
-    }
-
-    return self.keys[key];
-  },
-
-  equals: function (key, value) {
-    var self = this;
-    var context = Meteor.deps.Context.current;
-
-    if (typeof value !== 'string' &&
-        typeof value !== 'number' &&
-        typeof value !== 'boolean' &&
-        value !== null && value !== undefined)
-      throw new Error("Session.equals: value can't be an object");
-
-    if (context) {
-      self._ensureKey(key);
-      if (!(value in self.key_value_deps[key]))
-        self.key_value_deps[key][value] = {};
-
-      if (!(context.id in self.key_value_deps[key][value])) {
-        self.key_value_deps[key][value][context.id] = context;
-        context.onInvalidate(function () {
-          delete self.key_value_deps[key][value][context.id];
-
-          // clean up [key][value] if it's now empty, so we don't use
-          // O(n) memory for n = values seen ever
-          for (var x in self.key_value_deps[key][value])
-            return;
-          delete self.key_value_deps[key][value];
-        });
-      }
-    }
-
-    return self.keys[key] === value;
-  },
-
-  _ensureKey: function (key) {
-    var self = this;
-    if (!(key in self.key_deps)) {
-      self.key_deps[key] = {};
-      self.key_value_deps[key] = {};
-    }
-  }
-});
-
-
-if (Meteor._reload) {
-  Meteor._reload.onMigrate('session', function () {
-    // XXX sanitize and make sure it's JSONible?
-    return [true, {keys: Session.keys}];
-  });
-
-  (function () {
-    var migrationData = Meteor._reload.migrationData('session');
-    if (migrationData && migrationData.keys) {
-      Session.keys = migrationData.keys;
-    }
-  })();
-}
+/**
+ * @memberOf Session
+ * @method equals
+ * @summary Test if a session variable is equal to a value. If inside a
+ * [reactive computation](#reactivity), invalidate the computation the next
+ * time the variable changes to or from the value.
+ * @locus Client
+ * @param {String} key The name of the session variable to test
+ * @param {String | Number | Boolean | null | undefined} value The value to
+ * test against
+ */

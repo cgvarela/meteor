@@ -1,4 +1,4 @@
-Timers = new Meteor.Collection(null);
+Timers = new Mongo.Collection(null);
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -53,7 +53,7 @@ if (typeof Session.get("spinForward") !== 'boolean') {
 Template.preserveDemo.preserve([ '.spinner', '.spinforward' ]);
 
 Template.preserveDemo.spinForwardChecked = function () {
-  return Session.get('spinForward') ? 'checked="checked"' : '';
+  return Session.get('spinForward') ? 'checked' : '';
 };
 
 Template.preserveDemo.spinAnim = function () {
@@ -69,7 +69,7 @@ Template.preserveDemo.events({
 ///////////////////////////////////////////////////////////////////////////////
 
 Template.constantDemo.checked = function (which) {
-  return Session.get('mapchecked' + which) ? 'checked="checked"' : '';
+  return Session.get('mapchecked' + which) ? 'checked' : '';
 };
 
 Template.constantDemo.show = function (which) {
@@ -110,13 +110,13 @@ var updateTimer = function (timer) {
     ((timer.elapsed === 1) ? "" : "s");
 };
 
-Template.timer.created = function () {
+Template.timer.onCreated(function () {
   var self = this;
   self.elapsed = 0;
   self.node = null;
-};
+});
 
-Template.timer.rendered = function () {
+Template.timer.onRendered(function () {
   var self = this;
   self.node = this.find(".elapsed");
   updateTimer(self);
@@ -129,39 +129,13 @@ Template.timer.rendered = function () {
     };
     tick();
   }
-};
+});
 
-Template.timer.destroyed = function () {
+Template.timer.onDestroyed(function () {
   clearInterval(this.timer);
-};
+});
 
 ///////////////////////////////////////////////////////////////////////////////
-
-// Run f(). Record its dependencies. Rerun it whenever the
-// dependencies change.
-//
-// Returns an object with a stop() method. Call stop() to stop the
-// rerunning.
-//
-// XXX this should go into Meteor core as Meteor.autorun
-var autorun = function (f) {
-  var ctx;
-  var slain = false;
-  var rerun = function () {
-    if (slain)
-      return;
-    ctx = new Meteor.deps.Context;
-    ctx.run(f);
-    ctx.onInvalidate(rerun);
-  };
-  rerun();
-  return {
-    stop: function () {
-      slain = true;
-      ctx.invalidate();
-    }
-  };
-};
 
 Template.d3Demo.left = function () {
   return { group: "left" };
@@ -176,12 +150,12 @@ Template.circles.events({
     Session.set("selectedCircle:" + this.group, evt.currentTarget.id);
   },
   'click .add': function () {
-    Circles.insert({x: Meteor.random(), y: Meteor.random(),
-                    r: Meteor.random() * .1 + .02,
+    Circles.insert({x: Random.fraction(), y: Random.fraction(),
+                    r: Random.fraction() * .1 + .02,
                     color: {
-                      r: Meteor.random(),
-                      g: Meteor.random(),
-                      b: Meteor.random()
+                      r: Random.fraction(),
+                      g: Random.fraction(),
+                      b: Random.fraction()
                     },
                     group: this.group
                    });
@@ -197,10 +171,13 @@ Template.circles.events({
     Circles.find({group: this.group}).forEach(function (r) {
       Circles.update(r._id, {
         $set: {
-          x: Meteor.random(), y: Meteor.random(), r: Meteor.random() * .1 + .02
+          x: Random.fraction(), y: Random.fraction(), r: Random.fraction() * .1 + .02
         }
       });
     });
+  },
+  'click .clear': function () {
+    Circles.remove({group: this.group});
   }
 });
 
@@ -216,13 +193,13 @@ Template.circles.count = function () {
 
 Template.circles.disabled = function () {
   return Session.get("selectedCircle:" + this.group) ?
-    '' : 'disabled="disabled"';
+    '' : 'disabled';
 };
 
-Template.circles.created = function () {
-};
+Template.circles.onCreated(function () {
+});
 
-Template.circles.rendered = function () {
+Template.circles.onRendered(function () {
   var self = this;
   self.node = self.find("svg");
 
@@ -230,7 +207,7 @@ Template.circles.rendered = function () {
 
   if (! self.handle) {
     d3.select(self.node).append("rect");
-    self.handle = autorun(function () {
+    self.handle = Deps.autorun(function () {
       var circle = d3.select(self.node).selectAll("circle")
         .data(Circles.find({group: data.group}).fetch(),
               function (d) { return d._id; });
@@ -289,8 +266,8 @@ Template.circles.rendered = function () {
         rect.attr("display", 'none');
     });
   }
-};
+});
 
-Template.circles.destroyed = function () {
+Template.circles.onDestroyed(function () {
   this.handle && this.handle.stop();
-};
+});
